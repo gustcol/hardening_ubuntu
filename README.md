@@ -1,6 +1,6 @@
 # Ubuntu Hardening Suite
 
-[![Version](https://img.shields.io/badge/version-1.0-blue.svg)](https://github.com/your-repo/hardening-ubuntu)
+[![Version](https://img.shields.io/badge/version-1.0-blue.svg)](https://github.com/gustcol/hardening-ubuntu)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-18.04%20|%2020.04%20|%2022.04%20|%2024.04%20|%2025.04%20|%2025.10-orange)](https://ubuntu.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
@@ -32,7 +32,7 @@ This suite represents a significant evolution from original hardening scripts (`
 
 ```bash
 # Download and run
-wget https://raw.githubusercontent.com/your-repo/hardening-ubuntu/main/ubuntu-hardening-suite.sh
+wget https://raw.githubusercontent.com/gustcol/hardening-ubuntu/main/ubuntu-hardening-suite.sh
 chmod +x ubuntu-hardening-suite.sh
 sudo ./ubuntu-hardening-suite.sh
 ```
@@ -545,7 +545,7 @@ Contributions welcome! Areas for improvement:
 
 ```bash
 # Clone repository
-git clone https://github.com/your-repo/hardening-ubuntu.git
+git clone https://github.com/gustcol/hardening-ubuntu.git
 cd hardening-ubuntu
 
 # Run in development mode
@@ -571,7 +571,7 @@ This suite is provided "AS IS" without warranty. Always test in non-production e
 
 Based on and inspired by:
 
-- [du_setup](https://github.com/your-repo/du_setup) - Initial server setup
+- [du_setup](https://github.com/gustcol/du_setup) - Initial server setup
 - [Ubuntu-Security-Hardening-Script](https://github.com/gensecaihq/Ubuntu-Security-Hardening-Script) - Security hardening
 - Ubuntu Security Team best practices
 - CIS Ubuntu Linux Benchmarks
@@ -579,8 +579,8 @@ Based on and inspired by:
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-repo/hardening-ubuntu/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/hardening-ubuntu/discussions)
+- **Issues**: [GitHub Issues](https://github.com/gustcol/hardening-ubuntu/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/gustcol/hardening-ubuntu/discussions)
 - **Documentation**: This README and inline comments
 
 ---
