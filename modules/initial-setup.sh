@@ -149,7 +149,6 @@ configure_timezone() {
         print_info "Applying new locale settings to the current session..."
         if [[ -f /etc/default/locale ]]; then
             source /etc/default/locale
-            export $(grep -v '^#' /etc/default/locale | cut -d= -f1)
             print_message "$GREEN" "Locale environment updated for this session."
         fi
     fi
@@ -1300,7 +1299,7 @@ EOF
     chown "$USERNAME:$USERNAME" "$BASHRC_PATH"
     chmod 644 "$BASHRC_PATH"
 
-    print_success "Custom .bashrc created for '$USERNAME'"
+    print_message "$GREEN" "Custom .bashrc created for '$USERNAME'"
     print_info "The new .bashrc includes: enhanced prompt, git integration, docker shortcuts, system monitoring functions, and comprehensive help system."
 }
 
@@ -1678,15 +1677,16 @@ configure_ssh() {
         ssh_port=22
     fi
 
-    # Configure SSH
-    cat >> /etc/ssh/sshd_config << EOF
+    # Configure SSH via drop-in to avoid duplicate entries
+    mkdir -p /etc/ssh/sshd_config.d
+    cat > /etc/ssh/sshd_config.d/99-hardening.conf << EOF
 
 # Hardened SSH Configuration
 Port $ssh_port
 PermitRootLogin no
 PasswordAuthentication no
 PermitEmptyPasswords no
-ChallengeResponseAuthentication no
+KbdInteractiveAuthentication no
 UsePAM yes
 MaxAuthTries 3
 ClientAliveInterval 300
@@ -1701,7 +1701,7 @@ EOF
 
     # Test configuration
     if sshd -t; then
-        systemctl restart sshd
+        systemctl restart ssh
         print_message "$GREEN" "SSH configured successfully on port $ssh_port"
     else
         error_exit "SSH configuration test failed"

@@ -13,7 +13,7 @@ configure_filesystem_restrictions() {
     fi
 
     local disable_fs_conf="/etc/modprobe.d/disablefs.conf"
-    local filesystems="cramfs freevxfs jffs2 ksmbd hfs hfsplus udf vfat"
+    local filesystems="cramfs freevxfs jffs2 hfs hfsplus udf vfat"
 
     echo "# Ubuntu Hardening Suite - Disabled Filesystems" > "$disable_fs_conf"
 
@@ -59,7 +59,7 @@ configure_hardware_restrictions() {
     fi
 
     local disable_mod_conf="/etc/modprobe.d/disablemod.conf"
-    local modules="bluetooth bnep btusb cpia2 firewire-core floppy n_hdlc net-pf-31 pcspkr soundcore thunderbolt usb-midi usb-storage uvcvideo v4l2_common"
+    local modules="bluetooth bnep btusb cpia2 firewire-core floppy ksmbd n_hdlc net-pf-31 pcspkr soundcore thunderbolt usb-midi usb-storage uvcvideo v4l2_common"
 
     echo "# Ubuntu Hardening Suite - Disabled Hardware Modules" > "$disable_mod_conf"
 
@@ -131,14 +131,15 @@ configure_compiler_restrictions() {
         return
     fi
 
-    local compilers=$(dpkg-query -L $(dpkg -l | grep compil | awk '{print $2}') 2>/dev/null | grep -E '/bin/.*(gcc|g\+\+|as|cc)$')
+    local compilers
+    compilers=$(dpkg-query -L $(dpkg -l | grep compil | awk '{print $2}') 2>/dev/null | grep -E '/bin/.*(gcc|g\+\+|as|cc)$')
 
-    for compiler in $compilers; do
+    while IFS= read -r compiler; do
         if [[ -f "$compiler" && -x "$compiler" && ! -L "$compiler" ]]; then
             chmod 0750 "$compiler"
             print_message "$GREEN" "Restricted: $compiler"
         fi
-    done
+    done <<< "$compilers"
 
     print_message "$GREEN" "Compiler restrictions applied"
 }

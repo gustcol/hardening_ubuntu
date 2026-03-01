@@ -2,8 +2,8 @@
 # Ubuntu Hardening Suite - Combined Setup and Security Hardening
 # Combines du_setup and Ubuntu-Security-Hardening-Script functionality
 # Includes cloud-init image creation and Docker image building
-# Version: 1.0
-# Author: Combined from multiple sources
+# Version: 2.0
+# Author: Gustavo C Lima
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -17,7 +17,7 @@ readonly NC='\033[0m'
 
 # Global variables
 readonly SCRIPT_NAME=$(basename "$0")
-readonly SCRIPT_VERSION="1.0"
+readonly SCRIPT_VERSION="2.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly LOG_DIR="/var/log/hardening-suite"
 readonly LOG_FILE="${LOG_DIR}/hardening-$(date +%Y%m%d-%H%M%S).log"
@@ -25,6 +25,9 @@ readonly BACKUP_DIR="/var/backups/hardening-suite"
 readonly REPORT_FILE="${LOG_DIR}/hardening_report_$(date +%Y%m%d-%H%M%S).txt"
 readonly CONFIG_DIR="${SCRIPT_DIR}/configs"
 readonly MODULES_DIR="${SCRIPT_DIR}/modules"
+
+# Ensure log directory exists early so LOG_FILE is writable before any function runs
+mkdir -p "$LOG_DIR" 2>/dev/null || true
 
 # Default configuration
 MODE="interactive"
@@ -124,9 +127,7 @@ detect_ubuntu_version() {
         ;;
         *)
             print_message "$YELLOW" "WARNING: Ubuntu $UBUNTU_VERSION may not be fully supported"
-            read -p "Continue anyway? (y/N): " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            if ! confirm "Continue anyway?" "n"; then
                 exit 0
             fi
         ;;
@@ -135,16 +136,10 @@ detect_ubuntu_version() {
 
 # Function to create directories
 setup_directories() {
-    mkdir -p "$LOG_DIR" "$BACKUP_DIR" "$CONFIG_DIR" "$MODULES_DIR"
+    mkdir -p "$LOG_DIR" "$BACKUP_DIR"
     chmod 700 "$LOG_DIR" "$BACKUP_DIR"
 
-    # Create subdirectories
     mkdir -p "${LOG_DIR}/initial-audit"
-    mkdir -p "${MODULES_DIR}/initial-setup"
-    mkdir -p "${MODULES_DIR}/security-hardening"
-    mkdir -p "${MODULES_DIR}/advanced-hardening"
-    mkdir -p "${MODULES_DIR}/cloud-init"
-    mkdir -p "${MODULES_DIR}/docker"
 }
 
 # Function to backup configuration files
@@ -267,7 +262,9 @@ check_system_requirements() {
     fi
 
     # Check internet connectivity
-    if ! curl -s --head https://archive.ubuntu.com | head -1 | grep -q "200 OK"; then
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://archive.ubuntu.com)
+    if [[ ! "$http_code" =~ ^[23][0-9]{2}$ ]]; then
         error_exit "No internet connectivity detected."
     fi
 
@@ -317,7 +314,7 @@ install_base_packages() {
         "build-essential" "cmake" "make" "gcc" "g++" "python3" "python3-pip"
 
         # Security tools (basic set)
-        "openssl" "gnutls-bin" "cryptsetup" "ecryptfs-utils"
+        "openssl" "gnutls-bin" "cryptsetup"
         "libpam-pwquality" "libpam-tmpdir" "libpam-apparmor" "libpam-cap"
     )
 
@@ -408,29 +405,14 @@ run_cloud_security() {
 }
 
 # Function to run advanced hardening components
+# Runs ONLY when --advanced is explicitly passed or COMPONENTS explicitly contains "advanced-hardening".
+# COMPONENTS="all" does NOT include advanced hardening on its own.
 run_advanced_hardening() {
-    print_section "Advanced Hardening"
-
-    if [[ "$ADVANCED_HARDENING" != true ]] && [[ "$COMPONENTS" != "all" ]]; then
+    if [[ "$ADVANCED_HARDENING" != true ]] && [[ "$COMPONENTS" != *"advanced-hardening"* ]]; then
         return
     fi
 
-    # If explicitly requested via --advanced OR components=all
-    # However, since it's aggressive, maybe we only run if --advanced is set?
-    # The user request implied upgrading the script. Let's make it optional but accessible.
-
-    if [[ "$ADVANCED_HARDENING" != true ]]; then
-        # Check if explicitly in components
-        if [[ "$COMPONENTS" != *"advanced-hardening"* ]]; then
-            if [[ "$COMPONENTS" == "all" ]]; then
-                # For 'all', we might want to ask confirmation or skip aggressive parts?
-                # For now, let's treat 'all' as including it, but the module itself has confirmations.
-                :
-            else
-                return
-            fi
-        fi
-    fi
+    print_section "Advanced Hardening"
 
     if [[ -f "${MODULES_DIR}/advanced-hardening.sh" ]]; then
         source "${MODULES_DIR}/advanced-hardening.sh"
@@ -507,7 +489,7 @@ fi)
 $(if [[ "$COMPONENTS" == "all" ]] || [[ "$COMPONENTS" == *"cloud-security"* ]]; then
     echo "- Cloud Security (Metadata protection, cloud-init hardening)"
 fi)
-$(if [[ "$ADVANCED_HARDENING" == true ]] || [[ "$COMPONENTS" == "all" ]] || [[ "$COMPONENTS" == *"advanced-hardening"* ]]; then
+$(if [[ "$ADVANCED_HARDENING" == true ]] || [[ "$COMPONENTS" == *"advanced-hardening"* ]]; then
     echo "- Advanced Hardening (Filesystem/Network restrictions, Systemd hardening)"
 fi)
 $(if [[ "$CLOUD_INIT" == true ]]; then
@@ -596,7 +578,7 @@ main() {
     load_config
 
     print_message "$GREEN" "╔══════════════════════════════════════════════════════════════╗"
-    print_message "$GREEN" "║              Ubuntu Hardening Suite v${SCRIPT_VERSION}                  ║"
+    print_message "$GREEN" "║                 Ubuntu Hardening Suite v${SCRIPT_VERSION}                  ║"
     print_message "$GREEN" "╚══════════════════════════════════════════════════════════════╝"
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -629,7 +611,7 @@ main() {
     perform_final_checks
 
     print_message "$GREEN" "╔══════════════════════════════════════════════════════════════╗"
-    print_message "$GREEN" "║                Hardening Completed Successfully!               ║"
+    print_message "$GREEN" "║              Hardening Completed Successfully!               ║"
     print_message "$GREEN" "╚══════════════════════════════════════════════════════════════╝"
 
     print_message "$GREEN" "📋 Report Location: $REPORT_FILE"

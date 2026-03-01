@@ -30,7 +30,6 @@ max_log_file = 8
 num_logs = 5
 priority_boost = 4
 disp_qos = lossy
-dispatcher = /sbin/audispd
 name_format = HOSTNAME
 max_log_file_action = ROTATE
 space_left = 75
@@ -41,13 +40,6 @@ admin_space_left = 50
 admin_space_left_action = SUSPEND
 disk_full_action = SUSPEND
 disk_error_action = SUSPEND
-use_libwrap = yes
-tcp_listen_port = 60
-tcp_listen_queue = 5
-tcp_max_per_addr = 1
-tcp_client_max_idle = 0
-transport = TCP
-krb5_principal = auditd
 distribute_network = no
 q_depth = 1200
 overflow_action = SYSLOG
@@ -101,7 +93,7 @@ EOF
 
 # Monitor system calls
 -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change
--a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change
+-a always,exit -F arch=b32 -S adjtimex -S settimeofday -k time-change
 -a always,exit -F arch=b64 -S clock_settime -k time-change
 -a always,exit -F arch=b32 -S clock_settime -k time-change
 
@@ -216,7 +208,7 @@ configure_apparmor() {
 
     # Set kernel parameter
     if ! grep -q "apparmor=1" /etc/default/grub; then
-        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="apparmor=1 security=apparmor /' /etc/default/grub
+        sed -i 's/\(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*\)"/\1 apparmor=1 security=apparmor"/' /etc/default/grub
         update-grub
     fi
 
@@ -494,22 +486,24 @@ REPORT_DIR="/var/log/openscap"
 mkdir -p "\$REPORT_DIR"
 
 PROFILE="xccdf_org.ssgproject.content_profile_cis_level1_server"
+TIMESTAMP="\$(date +%Y%m%d-%H%M%S)"
+RESULTS_FILE="\$REPORT_DIR/results_\${TIMESTAMP}.xml"
 
 echo "Running OpenSCAP scan with profile: \$PROFILE"
 
 oscap xccdf eval \\
     --profile "\$PROFILE" \\
-    --report "\$REPORT_DIR/report_\$(date +%Y%m%d-%H%M%S).html" \\
-    --results "\$REPORT_DIR/results_\$(date +%Y%m%d-%H%M%S).xml" \\
+    --report "\$REPORT_DIR/report_\${TIMESTAMP}.html" \\
+    --results "\$RESULTS_FILE" \\
     --oval-results \\
     --fetch-remote-resources \\
-    "$ssg_file" 2>&1 | tee "\$REPORT_DIR/scan_\$(date +%Y%m%d-%H%M%S).log"
+    "$ssg_file" 2>&1 | tee "\$REPORT_DIR/scan_\${TIMESTAMP}.log"
 
-# Generate remediation script
+# Generate remediation script from the results file captured in this scan
 oscap xccdf generate fix \\
     --profile "\$PROFILE" \\
-    --output "\$REPORT_DIR/remediation_\$(date +%Y%m%d-%H%M%S).sh" \\
-    "\$REPORT_DIR"/results_*.xml 2>/dev/null || true
+    --output "\$REPORT_DIR/remediation_\${TIMESTAMP}.sh" \\
+    "\$RESULTS_FILE" 2>/dev/null || true
 
 echo ""
 echo "Scan complete. Reports saved to: \$REPORT_DIR"
@@ -610,7 +604,7 @@ fs.protected_hardlinks = 1
 fs.protected_symlinks = 1
 fs.protected_regular = 2
 fs.protected_fifos = 2
-kernel.unprivileged_userns_clone = 0
+kernel.unprivileged_bpf_disabled = 1
 
 # Performance and Resource Protection
 vm.swappiness = 10
@@ -628,14 +622,14 @@ net.ipv6.conf.lo.disable_ipv6 = 1
 kernel.printk = 3 3 3 3
 EOF
 
-    # Apply sysctl settings
-    sysctl -p /etc/sysctl.d/99-security-hardening.conf
+    # Apply sysctl settings; suppress errors for keys unavailable on older kernels
+    sysctl -p /etc/sysctl.d/99-security-hardening.conf 2>/dev/null || true
 
     # Configure kernel lockdown (if supported)
     if [[ -f /sys/kernel/security/lockdown ]]; then
         print_message "$BLUE" "Configuring kernel lockdown..."
         if ! grep -q "lockdown=integrity" /etc/default/grub; then
-            sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="lockdown=integrity /' /etc/default/grub
+            sed -i 's/\(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*\)"/\1 lockdown=integrity"/' /etc/default/grub
             update-grub
             print_message "$YELLOW" "Kernel lockdown configured - reboot required"
         fi
@@ -662,24 +656,11 @@ configure_pam_limits() {
         print_message "$GREEN" "Added pam_limits.so to common-session"
     fi
 
-    # Configure system limits
-    cat >> /etc/security/limits.conf << 'EOF'
+    # Configure system limits - guard against duplicate entries on re-run
+    if ! grep -q "Ubuntu Hardening Suite - System Limits Configuration" /etc/security/limits.conf; then
+        cat >> /etc/security/limits.conf << 'EOF'
 
 # Ubuntu Hardening Suite - System Limits Configuration
-* soft        nproc          65535
-* hard        nproc          65535
-* soft        nofile         65535
-* hard        nofile         65535
-root soft     nproc          65535
-root hard     nproc          65535
-root soft     nofile         65535
-root hard     nofile         65535
-EOF
-
-    # Additional security limits
-    cat >> /etc/security/limits.conf << 'EOF'
-
-# Additional security limits
 * soft        core           0
 * hard        core           0
 * soft        data           1048576
@@ -693,8 +674,10 @@ EOF
 * soft        stack          8192
 * hard        stack          8192
 EOF
+    fi
 
     # Create limits.d directory configuration for better organization
+    # nproc and nofile are managed here only; not duplicated in limits.conf
     mkdir -p /etc/security/limits.d
     cat > /etc/security/limits.d/99-hardening.conf << 'EOF'
 # Ubuntu Hardening Suite - Additional Limits
@@ -706,10 +689,6 @@ EOF
 # File descriptor limits
 *               soft    nofile          65535
 *               hard    nofile          65535
-
-# Memory limits for security
-*               soft    as              1048576
-*               hard    as              1048576
 
 # Core dump prevention
 *               soft    core            0
