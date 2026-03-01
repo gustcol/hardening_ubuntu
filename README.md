@@ -1,6 +1,6 @@
 # Ubuntu Hardening Suite
 
-[![Version](https://img.shields.io/badge/version-1.0-blue.svg)](https://github.com/gustcol/hardening-ubuntu)
+[![Version](https://img.shields.io/badge/version-2.0-blue.svg)](https://github.com/gustcol/hardening-ubuntu)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-18.04%20|%2020.04%20|%2022.04%20|%2024.04%20|%2025.04%20|%2025.10-orange)](https://ubuntu.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
@@ -25,6 +25,31 @@ This suite represents a significant evolution from original hardening scripts (`
 - **✅ Advanced Shell Environment**: Custom `.bashrc` with 200+ productivity functions and aliases.
 - **✅ Modern Ubuntu Support**: Full support for Ubuntu 20.04, 22.04, 24.04, and experimental support for 25.x.
 - **✅ Container Security**: Specialized hardening for Docker containers and images.
+
+### v2.0 Changes (March 2026)
+
+- Fixed critical bug: log directory created before first write
+- Fixed undefined `print_success` function call
+- Fixed SSH service name (`sshd` -> `ssh`) for Ubuntu
+- Removed dangerous TCP listener in auditd configuration
+- Fixed HTTP/2 incompatible internet connectivity check
+- Fixed SSH config using drop-in files (`sshd_config.d`) instead of appending
+- Replaced deprecated `ChallengeResponseAuthentication` with `KbdInteractiveAuthentication`
+- Removed deprecated `ecryptfs-utils` (replaced by LUKS full-disk encryption)
+- Removed Debian-only `kernel.unprivileged_userns_clone` sysctl
+- Added `kernel.unprivileged_bpf_disabled` for kernel 6.x
+- Fixed Ubuntu 25.04 kernel version (6.11 -> 6.14)
+- Fixed Ubuntu 25.10 kernel version (6.12 -> 6.17)
+- Removed obsolete Docker Compose `version` key
+- Added missing `ubuntu-18.04.conf` configuration
+- Fixed duplicate `TIME_SYNC_SERVICE` in config files
+- Fixed advanced hardening running unintentionally with `COMPONENTS=all`
+- Improved PAM limits: removed duplicates and unsafe address space limit
+- Fixed non-idempotent GRUB sed commands
+- Added CLOUD_PROVIDER default guard for `set -u` safety
+- Moved `ksmbd` from filesystem to hardware module restrictions
+- Added comprehensive test suite (`tests/test-suite.sh`)
+- Fixed deprecated `stime` syscall in audit rules
 
 ## 🚀 Quick Start
 
@@ -136,6 +161,8 @@ hardening_ubuntu/
 │   ├── ubuntu-24.04.conf        # Ubuntu 24.04 specific config
 │   ├── ubuntu-25.04.conf        # Ubuntu 25.04 specific config
 │   └── ubuntu-25.10.conf        # Ubuntu 25.10 specific config
+├── tests/
+│   └── test-suite.sh              # Comprehensive test suite
 ├── test-pam-limits.sh           # PAM limits validation script
 └── README.md                    # This documentation
 ```
@@ -272,6 +299,11 @@ The suite includes comprehensive testing tools to ensure hardening is applied co
 ### PAM Limits Verification
 
 Use `test-pam-limits.sh` to verify that PAM limits are correctly applied for root and non-root users:
+
+```bash
+# Run full test suite
+bash tests/test-suite.sh
+```
 
 ```bash
 ./test-pam-limits.sh
@@ -585,5 +617,5 @@ Based on and inspired by:
 
 ---
 
-**Version**: 1.0 | **Ubuntu Support**: 18.04, 20.04, 22.04, 24.04, 25.04, 25.10
+**Version**: 2.0 | **Ubuntu Support**: 18.04, 20.04, 22.04, 24.04, 25.04, 25.10
 **Status**: Production Ready | **License**: MIT

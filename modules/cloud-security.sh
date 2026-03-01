@@ -336,6 +336,7 @@ configure_cloud_metadata_protection() {
 
 # Function to configure cloud-init security
 configure_cloud_init_security() {
+    CLOUD_PROVIDER="${CLOUD_PROVIDER:-generic}"
     print_message "$GREEN" "Configuring cloud-init security..."
 
     if [[ "$DRY_RUN" == true ]]; then

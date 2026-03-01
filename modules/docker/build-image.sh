@@ -279,8 +279,6 @@ create_docker_compose() {
     fi
 
     cat > "$compose_file" << EOF
-version: '3.8'
-
 services:
   ubuntu-hardened:
     build:
