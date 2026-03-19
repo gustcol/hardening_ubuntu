@@ -15,8 +15,11 @@ detect_environment() {
     local MANUFACTURER=""
     local PRODUCT=""
     local IS_CLOUD_VPS=false
-    local ENVIRONMENT_TYPE="unknown"
-    local DETECTED_PROVIDER_NAME=""
+    DETECTED_VIRT_TYPE=""
+    DETECTED_MANUFACTURER=""
+    DETECTED_PRODUCT=""
+    ENVIRONMENT_TYPE="unknown"
+    DETECTED_PROVIDER_NAME=""
 
     # systemd-detect-virt
     if command -v systemd-detect-virt &>/dev/null; then
@@ -1347,8 +1350,15 @@ create_admin_user() {
 
     # Get username
     if [[ "$MODE" == "interactive" ]]; then
+        local retries=0
         read -p "Enter admin username: " username
         while [[ -z "$username" ]] || ! [[ "$username" =~ ^[a-z_][a-z0-9_-]*$ ]]; do
+            retries=$((retries + 1))
+            if [[ $retries -ge 5 ]]; then
+                print_message "$YELLOW" "Too many invalid attempts, using default username: admin"
+                username="admin"
+                break
+            fi
             read -p "Invalid username. Enter admin username: " username
         done
     else
@@ -1361,8 +1371,12 @@ create_admin_user() {
         return
     fi
 
-    # Create user
-    useradd -m -s /bin/bash "$username"
+    # Create user (use --no-user-group if group with same name exists)
+    if getent group "$username" &>/dev/null; then
+        useradd -m -s /bin/bash -g "$username" "$username"
+    else
+        useradd -m -s /bin/bash "$username"
+    fi
     usermod -aG sudo "$username"
 
     # Set password
@@ -1622,7 +1636,8 @@ cleanup_provider_packages() {
     fi
 
     # Detect provider and remove unnecessary packages
-    case "$DETECTED_PROVIDER_NAME" in
+    local provider_name="${DETECTED_PROVIDER_NAME:-}"
+    case "$provider_name" in
         "DigitalOcean")
             # Remove DigitalOcean monitoring agent if not needed
             if confirm "Remove DigitalOcean monitoring agent?" "n"; then

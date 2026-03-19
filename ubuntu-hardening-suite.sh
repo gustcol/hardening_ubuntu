@@ -8,6 +8,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Set non-interactive frontend for apt to avoid debconf errors
+export DEBIAN_FRONTEND=noninteractive
+
 # Color codes
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
@@ -32,6 +35,8 @@ mkdir -p "$LOG_DIR" 2>/dev/null || true
 # Default configuration
 MODE="interactive"
 COMPONENTS="all"
+CONFIG_FILE=""
+CLI_NON_INTERACTIVE=false
 CLOUD_INIT=false
 DOCKER_BUILD=false
 ADVANCED_HARDENING=false
@@ -189,6 +194,15 @@ parse_arguments() {
                 VERBOSE=false
                 shift
             ;;
+            --config)
+                CONFIG_FILE="$2"
+                shift 2
+            ;;
+            --yes|-y)
+                MODE="non-interactive"
+                CLI_NON_INTERACTIVE=true
+                shift
+            ;;
             --components)
                 COMPONENTS="$2"
                 shift 2
@@ -218,6 +232,8 @@ OPTIONS:
     --advanced            Run advanced hardening (aggressive options)
     --dry-run             Show what would be done without making changes
     --quiet               Reduce output verbosity
+    --config FILE         Load configuration from FILE
+    --yes, -y             Run in non-interactive mode (auto-accept defaults)
     --components LIST     Comma-separated list of components to install
                          (all, initial-setup, security-hardening, cloud-security)
     --help                Show this help message
@@ -568,14 +584,33 @@ perform_final_checks() {
 
 # Main function
 main() {
-    # Parse command line arguments
-    parse_arguments "$@"
-
     # Initial setup
     check_root
     setup_directories
     detect_ubuntu_version
     load_config
+
+    # Parse command line arguments (after config loading so CLI flags override config)
+    parse_arguments "$@"
+
+    # Load user-specified config file (overrides version-specific defaults)
+    if [[ -n "${CONFIG_FILE:-}" ]] && [[ -f "${CONFIG_FILE}" ]]; then
+        source "${CONFIG_FILE}"
+        print_message "$GREEN" "Loaded configuration from: $CONFIG_FILE"
+    elif [[ -n "${CONFIG_FILE:-}" ]]; then
+        # Try relative to SCRIPT_DIR
+        if [[ -f "${SCRIPT_DIR}/${CONFIG_FILE}" ]]; then
+            source "${SCRIPT_DIR}/${CONFIG_FILE}"
+            print_message "$GREEN" "Loaded configuration from: ${SCRIPT_DIR}/${CONFIG_FILE}"
+        else
+            error_exit "Configuration file not found: $CONFIG_FILE"
+        fi
+    fi
+
+    # Re-apply CLI overrides that config files may have overwritten
+    if [[ "$CLI_NON_INTERACTIVE" == true ]]; then
+        MODE="non-interactive"
+    fi
 
     print_message "$GREEN" "╔══════════════════════════════════════════════════════════════╗"
     print_message "$GREEN" "║                 Ubuntu Hardening Suite v${SCRIPT_VERSION}                  ║"
@@ -589,11 +624,9 @@ main() {
     check_system_requirements
 
     # Create system backup prompt
-    if [[ "$DRY_RUN" == false ]]; then
+    if [[ "$DRY_RUN" == false ]] && [[ "$MODE" == "interactive" ]]; then
         print_message "$YELLOW" "Consider creating a system backup/snapshot before proceeding"
-        if [[ "$MODE" == "interactive" ]]; then
-            read -p "Press Enter to continue or Ctrl+C to cancel..."
-        fi
+        read -p "Press Enter to continue or Ctrl+C to cancel..."
     fi
 
     # Main execution

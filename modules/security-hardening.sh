@@ -163,8 +163,8 @@ EOF
 -e 2
 EOF
 
-    # Load rules and restart auditd
-    augenrules --load
+    # Load rules and restart auditd (augenrules returns 1 when no change)
+    augenrules --load || true
     systemctl restart auditd
     systemctl enable auditd
 
